@@ -14,34 +14,37 @@ def fetch(url):
     resp.raise_for_status()
     return BeautifulSoup(resp.text, "html.parser")
 
-# Scrape article URLs
+# Scrape URLs
 soup = fetch(ENTERTAINMENT_URL)
 links = [a["href"] for a in soup.select("article a[href*='/entertainment/']")]
 urls = [(l if l.startswith("http") else BASE_URL + l) for l in links]
 
-# Filter by author & extract metadata
 found = []
 for url in urls:
     page = fetch(url)
-    author = page.select_one("span.text-sm.font-medium.text-gray-900")
-    if not author or author.text.strip() != AUTHOR_NAME:
+    author_el = page.select_one("span.text-sm.font-medium.text-gray-900")
+    if not author_el or author_el.text.strip() != AUTHOR_NAME:
         continue
 
     container = page.select_one("article") or page
-    title = container.select_one("h3").get_text(strip=True)
-    desc = container.select_one("p").get_text(strip=True) if container.select_one("p") else ""
-    img = container.select_one("picture img")
-    img_url = img["src"].split("?")[0] if img else ""
-    found.append({"title": title, "description": desc, "image": img_url, "url": url})
+    title_el = container.select_one("h3")
+    if not title_el:
+        continue
 
-# Load existing data
+    title = title_el.get_text(strip=True)
+    desc_el = container.select_one("p")
+    description = desc_el.get_text(strip=True) if desc_el else ""
+    img_el = container.select_one("picture img")
+    image = img_el["src"].split("?")[0] if img_el else ""
+
+    found.append({"title": title, "description": description, "image": image, "url": url})
+
 existing = []
 if os.path.exists(JSON_FILE):
     with open(JSON_FILE) as f:
         existing = json.load(f)
 
-# Append only new articles
-new = [item for item in found if all(item["url"] != e["url"] for e in existing)]
+new = [item for item in found if not any(item["url"] == e["url"] for e in existing)]
 if new:
     existing.extend(new)
     with open(JSON_FILE, "w") as f:
@@ -50,18 +53,17 @@ if new:
 else:
     print("ℹ️ No new articles")
 
-# Build RSS feed.xml
 rss = Element("rss", version="2.0")
 channel = SubElement(rss, "channel")
 SubElement(channel, "title").text = "Tierney’s Takeaways"
 SubElement(channel, "link").text = BASE_URL
 SubElement(channel, "description").text = "Latest articles by Hunter Tierney"
 
-for article in existing:
+for art in existing:
     item = SubElement(channel, "item")
-    SubElement(item, "title").text = article["title"]
-    SubElement(item, "link").text = article["url"]
-    SubElement(item, "description").text = article["description"]
+    SubElement(item, "title").text = art["title"]
+    SubElement(item, "link").text = art["url"]
+    SubElement(item, "description").text = art["description"]
     SubElement(item, "pubDate").text = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
 
 ElementTree(rss).write(RSS_FILE, encoding="utf-8", xml_declaration=True)
