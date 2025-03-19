@@ -14,16 +14,18 @@ def fetch(url):
     resp.raise_for_status()
     return BeautifulSoup(resp.text, "html.parser")
 
-# Scrape URLs
+# 1️⃣ Gather article URLs
 soup = fetch(ENTERTAINMENT_URL)
-links = [a["href"] for a in soup.select("article a[href*='/entertainment/']")]
-urls = [(l if l.startswith("http") else BASE_URL + l) for l in links]
+urls = [
+    (a["href"] if a["href"].startswith("http") else BASE_URL + a["href"])
+    for a in soup.select("article a[href*='/entertainment/']")
+]
 
 found = []
 for url in urls:
     page = fetch(url)
     author_el = page.select_one("span.text-sm.font-medium.text-gray-900")
-    if not author_el or author_el.text.strip() != AUTHOR_NAME:
+    if not author_el or author_el.get_text(strip=True) != AUTHOR_NAME:
         continue
 
     container = page.select_one("article") or page
@@ -31,28 +33,29 @@ for url in urls:
     if not title_el:
         continue
 
-    title = title_el.get_text(strip=True)
-    desc_el = container.select_one("p")
-    description = desc_el.get_text(strip=True) if desc_el else ""
-    img_el = container.select_one("picture img")
-    image = img_el["src"].split("?")[0] if img_el else ""
+    found.append({
+        "title": title_el.get_text(strip=True),
+        "description": (container.select_one("p").get_text(strip=True) if container.select_one("p") else ""),
+        "image": (container.select_one("picture img")["src"].split("?")[0] if container.select_one("picture img") else ""),
+        "url": url
+    })
 
-    found.append({"title": title, "description": description, "image": image, "url": url})
-
+# 2️⃣ Load existing feed
 existing = []
 if os.path.exists(JSON_FILE):
     with open(JSON_FILE) as f:
         existing = json.load(f)
 
-new = [item for item in found if not any(item["url"] == e["url"] for e in existing)]
+new = [item for item in found if all(item["url"] != e["url"] for e in existing)]
 if new:
     existing.extend(new)
     with open(JSON_FILE, "w") as f:
         json.dump(existing, f, indent=2)
-    print(f"✅ Added {len(new)} new articles")
+    print(f"✅ Added {len(new)} new article(s)")
 else:
     print("ℹ️ No new articles")
 
+# 3️⃣ Build RSS
 rss = Element("rss", version="2.0")
 channel = SubElement(rss, "channel")
 SubElement(channel, "title").text = "Tierney’s Takeaways"
