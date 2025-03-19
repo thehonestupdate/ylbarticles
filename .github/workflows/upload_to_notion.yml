@@ -1,0 +1,27 @@
+name: Upload Articles to Notion
+
+on:
+  schedule:
+    - cron: "30 */12 * * *"  # Runs every hour at minute 30
+  workflow_dispatch: # Allows manual runs
+
+jobs:
+  upload-to-notion:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Notion uploader script
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        run: python notion_uploader.py
