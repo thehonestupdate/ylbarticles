@@ -1,28 +1,49 @@
-import json, os, requests
+import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-from xml.etree.ElementTree import Element, SubElement, ElementTree
+
+# Google Form POST endpoint
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfKby6yb-nf7mh8pl09nhh-1hBbWOpoMtTckBboKQdCMWFs9Q/formResponse"
+
+# Field mapping based on your prefilled link
+FORM_FIELDS = {
+    "title": "entry.2088210590",
+    "description": "entry.1957164180",
+    "image": "entry.1419895096",
+    "url": "entry.335710612",
+    "date": "entry.1788674821"
+}
 
 BASE_URL = "https://www.yourlifebuzz.com"
 ENTERTAINMENT_URL = f"{BASE_URL}/entertainment/"
 AUTHOR_NAME = "Hunter Tierney"
-JSON_FILE = "your_articles.json"
-RSS_FILE = "feed.xml"
+
+# Track submitted articles (local state file)
+SEEN_FILE = "seen_urls.txt"
 
 def fetch(url):
     resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     return BeautifulSoup(resp.text, "html.parser")
 
-# 1️⃣ Gather article URLs
+# Load previously submitted URLs
+seen = set()
+if os.path.exists(SEEN_FILE):
+    with open(SEEN_FILE, "r") as f:
+        seen = set(line.strip() for line in f.readlines())
+
+# Fetch entertainment article URLs
 soup = fetch(ENTERTAINMENT_URL)
 urls = [
     (a["href"] if a["href"].startswith("http") else BASE_URL + a["href"])
     for a in soup.select("article a[href*='/entertainment/']")
 ]
 
-found = []
+new_articles = []
 for url in urls:
+    if url in seen:
+        continue
+
     page = fetch(url)
     author_el = page.select_one("span.text-sm.font-medium.text-gray-900")
     if not author_el or author_el.get_text(strip=True) != AUTHOR_NAME:
@@ -33,41 +54,28 @@ for url in urls:
     if not title_el:
         continue
 
-    found.append({
-        "title": title_el.get_text(strip=True),
-        "description": (container.select_one("p").get_text(strip=True) if container.select_one("p") else ""),
-        "image": (container.select_one("picture img")["src"].split("?")[0] if container.select_one("picture img") else ""),
-        "url": url
-    })
+    title = title_el.get_text(strip=True)
+    desc = container.select_one("p").get_text(strip=True) if container.select_one("p") else ""
+    image = container.select_one("picture img")["src"].split("?")[0] if container.select_one("picture img") else ""
+    date = datetime.utcnow().strftime("%Y-%m-%d")
 
-# 2️⃣ Load existing feed
-existing = []
-if os.path.exists(JSON_FILE):
-    with open(JSON_FILE) as f:
-        existing = json.load(f)
+    data = {
+        FORM_FIELDS["title"]: title,
+        FORM_FIELDS["description"]: desc,
+        FORM_FIELDS["image"]: image,
+        FORM_FIELDS["url"]: url,
+        FORM_FIELDS["date"]: date
+    }
 
-new = [item for item in found if all(item["url"] != e["url"] for e in existing)]
-if new:
-    existing.extend(new)
-    with open(JSON_FILE, "w") as f:
-        json.dump(existing, f, indent=2)
-    print(f"✅ Added {len(new)} new article(s)")
-else:
-    print("ℹ️ No new articles")
+    res = requests.post(FORM_URL, data=data)
+    if res.status_code == 200:
+        print(f"✅ Submitted: {title}")
+        new_articles.append(url)
+    else:
+        print(f"❌ Failed to submit {url} – Status {res.status_code}")
 
-# 3️⃣ Build RSS
-rss = Element("rss", version="2.0")
-channel = SubElement(rss, "channel")
-SubElement(channel, "title").text = "Tierney’s Takeaways"
-SubElement(channel, "link").text = BASE_URL
-SubElement(channel, "description").text = "Latest articles by Hunter Tierney"
-
-for art in existing:
-    item = SubElement(channel, "item")
-    SubElement(item, "title").text = art["title"]
-    SubElement(item, "link").text = art["url"]
-    SubElement(item, "description").text = art["description"]
-    SubElement(item, "pubDate").text = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-
-ElementTree(rss).write(RSS_FILE, encoding="utf-8", xml_declaration=True)
-print(f"✅ Generated {RSS_FILE}")
+# Save newly submitted URLs
+if new_articles:
+    with open(SEEN_FILE, "a") as f:
+        for url in new_articles:
+            f.write(url + "\n")
