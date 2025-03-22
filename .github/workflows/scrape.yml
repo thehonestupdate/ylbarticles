@@ -18,8 +18,11 @@ jobs:
           python-version: "3.10"
 
       - name: Install Dependencies
+        run: pip install beautifulsoup4 requests gspread oauth2client
+
+      - name: Add Google Credentials
         run: |
-          pip install beautifulsoup4 requests gspread oauth2client
+          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > dev-access-454506-p1-769e1e9db6ec.json
 
       - name: Run Scraper
         run: python scrape_ylb.py
