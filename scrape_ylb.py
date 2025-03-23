@@ -13,7 +13,7 @@ TARGET_SHEET_INDEX = 0  # Sheet1 = index 0
 
 creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, SCOPE)
 client = gspread.authorize(creds)
-sheet = client.open(SHEET_NAME).worksheet('Sheet1')  # Access 'Sheet1'
+sheet = client.open(SHEET_NAME).worksheet("Sheet1")  # Access 'Sheet1'
 
 # Scraper setup
 BASE_URL = "https://www.yourlifebuzz.com"
@@ -81,11 +81,12 @@ for url in urls:
 
     raw_text = date_el.get_text(strip=True)
     # 4) Extract just "Mar 20, 2025" (split at '·')
-    date_part = raw_text.split('·')[0].strip()  # => "Mar 20, 2025"
+    date_part = raw_text.split("·")[0].strip()  # => "Mar 20, 2025"
+
+    # 5) Parse into a Python date, then convert to "MM/DD/YYYY 0:00:00"
     try:
-        # 5) Parse into a Python date, then convert to "YYYY-MM-DD"
         parsed_date = datetime.strptime(date_part, "%b %d, %Y")
-        date = parsed_date.strftime("%Y-%m-%d")
+        date_str = parsed_date.strftime("%m/%d/%Y") + " 0:00:00"
     except ValueError:
         print(f"Debugging: Date parsing failed for text: '{raw_text}' in {url}")
         continue
@@ -95,12 +96,15 @@ for url in urls:
     print(f"Description: {desc}")
     print(f"Image: {image}")
     print(f"URL: {url}")
-    print(f"Date: {date}")
+    print(f"Date: {date_str}")
     print("------------------------------------------------------")
 
     # 6) Append the row to Google Sheets
     try:
-        sheet.append_row([title, desc, image, url, date])
+        sheet.append_row(
+            [title, desc, image, url, date_str],
+            value_input_option="USER_ENTERED"  # Key for date/time detection
+        )
         print(f"✅ Added to sheet: {title}")
         new_articles.append(url)
     except Exception as e:
