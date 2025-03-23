@@ -48,29 +48,47 @@ print("------------------------------------------------------")
 new_articles = []
 for url in urls:
     print(f"Debugging: Processing URL: {url}")
-    
+
     if url in seen:
         print(f"Debugging: Already seen: {url}")
         continue
 
     page = fetch(url)
+
+    # 1) Check if author is correct
     author_el = page.select_one("span.text-sm.font-medium.text-gray-900")
     if not author_el or author_el.get_text(strip=True) != AUTHOR_NAME:
         print(f"Debugging: Skipping article – author mismatch: {url}")
         continue
 
+    # 2) Grab title, image, and description
     title_el = page.select_one("h1.text-4xl.font-extrabold")
     img_el = page.select_one("img.h-full.w-full.object-cover.object-center")
     desc_el = page.find("meta", attrs={"name": "description"})
-
     if not title_el:
         print(f"Debugging: Skipping article – no title found: {url}")
         continue
 
     title = title_el.get_text(strip=True)
     desc = desc_el["content"] if desc_el else ""
-    image = img_el["src"].split("?")[0] if img_el and img_el.has_attr("src") else ""
-    date = datetime.utcnow().strftime("%Y-%m-%d")
+    image = img_el["src"].split("?")[0] if (img_el and img_el.has_attr("src")) else ""
+
+    # 3) Find the date element: e.g. "Mar 20, 2025 · 5 min read"
+    date_el = page.select_one("span.flex.items-center.gap-1.text-xs.font-medium.text-gray-400")
+    if not date_el:
+        print(f"Debugging: Skipping article – no date found: {url}")
+        continue
+
+    raw_text = date_el.get_text(strip=True)
+    # 4) Extract just "Mar 20, 2025" (split at '·')
+    date_part = raw_text.split('·')[0].strip()  # => "Mar 20, 2025"
+    try:
+        # 5) Parse into a Python date, then convert to "YYYY-MM-DD"
+        parsed_date = datetime.strptime(date_part, "%b %d, %Y")
+        date = parsed_date.strftime("%Y-%m-%d")
+    except ValueError:
+        print(f"Debugging: Date parsing failed for text: '{raw_text}' in {url}")
+        continue
 
     # Debugging: Print data before appending
     print(f"Debugging: Title: {title}")
@@ -80,15 +98,15 @@ for url in urls:
     print(f"Date: {date}")
     print("------------------------------------------------------")
 
+    # 6) Append the row to Google Sheets
     try:
-        # Append data to Google Sheets
         sheet.append_row([title, desc, image, url, date])
         print(f"✅ Added to sheet: {title}")
         new_articles.append(url)
     except Exception as e:
         print(f"❌ Failed to add {title} to sheet – {e}")
 
-# Save the URLs we've processed to avoid processing them again in the future
+# Save the URLs we've processed to avoid duplicates
 if new_articles:
     with open(SEEN_FILE, "a") as f:
         for url in new_articles:
