@@ -22,7 +22,7 @@ jobs:
 
       - name: Add Google Credentials
         run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > dev-access-454506-p1-769e1e9db6ec.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > dev-access-454506-p1-769e1e9db6ec.json
 
       - name: Run Scraper
         run: python scrape_ylb.py
