@@ -107,6 +107,7 @@ for url in urls:
         )
         print(f"✅ Added to sheet: {title}")
         new_articles.append(url)
+        seen.add(url)  # ✅ Add to seen in memory
     except Exception as e:
         print(f"❌ Failed to add {title} to sheet – {e}")
 
