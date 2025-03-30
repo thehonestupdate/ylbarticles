@@ -121,9 +121,3 @@ if new_articles:
     with open(SEEN_FILE, "a") as f:
         for url in new_articles:
             f.write(url + "\n")
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-git add seen_urls.txt
-git commit -m "Update seen URLs"
-git push
