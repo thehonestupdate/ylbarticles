@@ -106,8 +106,13 @@ for url in urls:
             value_input_option="USER_ENTERED"  # Key for date/time detection
         )
         print(f"✅ Added to sheet: {title}")
-        new_articles.append(url)
         seen.add(url)  # ✅ Add to seen in memory
+
+        # ✅ Immediately write to seen_urls.txt after adding
+        with open(SEEN_FILE, "a") as f:
+            f.write(url + "\n")
+
+        new_articles.append(url)
     except Exception as e:
         print(f"❌ Failed to add {title} to sheet – {e}")
 
