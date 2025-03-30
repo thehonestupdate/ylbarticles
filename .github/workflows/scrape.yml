@@ -5,12 +5,18 @@ on:
     - cron: "0 */12 * * *"  # Every 12 hours
   workflow_dispatch:
 
+permissions:
+  contents: write  # ⬅️ Needed to commit changes back to the repo
+
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # ⬅️ Enables push
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -24,5 +30,17 @@ jobs:
         run: |
           echo '${{ secrets.GOOGLE_CREDENTIALS }}' > dev-access-454506-p1-769e1e9db6ec.json
 
-      - name: Run Scraper
+      - name: Run Scraper Script
         run: python scrape_ylb.py
+
+      - name: Commit Updated seen_urls.txt
+        run: |
+          if git diff --quiet seen_urls.txt; then
+            echo "No changes to seen_urls.txt"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add seen_urls.txt
+            git commit -m "Update seen_urls.txt with newly scraped articles"
+            git push
+          fi
